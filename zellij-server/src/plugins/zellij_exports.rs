@@ -146,8 +146,17 @@ impl ForeignFunctionEnv {
 fn host_subscribe(env: &ForeignFunctionEnv) {
     wasi_read_object::<HashSet<EventType>>(&env.plugin_env.wasi_env)
         .and_then(|new| {
-            env.subscriptions.lock().to_anyhow()?.extend(new);
-            Ok(())
+            env.subscriptions.lock().to_anyhow()?.extend(new.clone());
+            Ok(new)
+        })
+        .and_then(|new| {
+            env.plugin_env
+                .senders
+                .send_to_plugin(PluginInstruction::PluginSubscribedToEvents(
+                    env.plugin_env.plugin_id,
+                    env.plugin_env.client_id,
+                    new,
+                ))
         })
         .with_context(|| format!("failed to subscribe for plugin {}", env.plugin_env.name()))
         .fatal();
@@ -937,10 +946,19 @@ fn host_start_or_reload_plugin(env: &ForeignFunctionEnv) {
             env.plugin_env.name()
         )
     };
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     wasi_read_string(&env.plugin_env.wasi_env)
         .and_then(|url| Url::parse(&url).map_err(|e| anyhow!("Failed to parse url: {}", e)))
         .and_then(|url| {
-            let action = Action::StartOrReloadPlugin(url);
+            RunPluginLocation::parse(url.as_str(), Some(cwd))
+                .map_err(|e| anyhow!("Failed to parse plugin location: {}", e))
+        })
+        .and_then(|run_plugin_location| {
+            let run_plugin = RunPlugin {
+                location: run_plugin_location,
+                _allow_exec_host_cmd: false,
+            };
+            let action = Action::StartOrReloadPlugin(run_plugin);
             apply_action!(action, error_msg, env);
             Ok(())
         })

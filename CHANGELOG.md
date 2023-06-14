@@ -28,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 * fix: cursor flickering (https://github.com/zellij-org/zellij/pull/2528)
 * fix: focus tab as well as pane when relaunching plugin (https://github.com/zellij-org/zellij/pull/2530)
 * feat: ui improvements for strider search (https://github.com/zellij-org/zellij/pull/2531)
+* fix: only watch fs if plugins explicitly request it (https://github.com/zellij-org/zellij/pull/2529)
+* fix: suppress debug logging when not debugging (https://github.com/zellij-org/zellij/pull/2532)
 
 ## [0.36.0] - 2023-04-13
 * fix: when moving pane focus off screen edge to the next tab, the pane on the screen edge is now focused (https://github.com/zellij-org/zellij/pull/2293)
@@ -46,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 * fix: strider now no longer opens one pane per client when editing files (https://github.com/zellij-org/zellij/pull/2346)
 * fix: set sticky bit on socket files to avoid automatic cleanup (https://github.com/zellij-org/zellij/pull/2141)
 * fix: memory leak when attaching/detaching from sessions (https://github.com/zellij-org/zellij/pull/2328)
+* fix: allow loading plugins from relative urls (https://github.com/zellij-org/zellij/pull/2539)
 
 ## [0.35.2] - 2023-03-10
 * fix: get "zellij attach --create" working again (https://github.com/zellij-org/zellij/pull/2247)

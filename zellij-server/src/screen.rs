@@ -260,7 +260,7 @@ pub enum ScreenInstruction {
     NewTiledPluginPane(RunPluginLocation, Option<String>, ClientId), // Option<String> is
     // optional pane title
     NewFloatingPluginPane(RunPluginLocation, Option<String>, ClientId), // Option<String> is an
-    StartOrReloadPluginPane(RunPluginLocation, Option<String>),
+    StartOrReloadPluginPane(RunPlugin, Option<String>),
     // optional pane title
     AddPlugin(
         Option<bool>, // should_float
@@ -502,6 +502,7 @@ pub(crate) struct Screen {
     auto_layout: bool,
     session_is_mirrored: bool,
     copy_options: CopyOptions,
+    debug: bool,
 }
 
 impl Screen {
@@ -515,6 +516,7 @@ impl Screen {
         auto_layout: bool,
         session_is_mirrored: bool,
         copy_options: CopyOptions,
+        debug: bool,
     ) -> Self {
         Screen {
             bus,
@@ -537,6 +539,7 @@ impl Screen {
             auto_layout,
             session_is_mirrored,
             copy_options,
+            debug,
         }
     }
 
@@ -929,7 +932,6 @@ impl Screen {
             self.character_cell_size.clone(),
         );
         let mut tabs_to_close = vec![];
-        let size = self.size;
         for (tab_index, tab) in &mut self.tabs {
             if tab.has_selectable_tiled_panes() {
                 tab.render(&mut output).context(err_context)?;
@@ -1056,6 +1058,7 @@ impl Screen {
             self.terminal_emulator_colors.clone(),
             self.terminal_emulator_color_codes.clone(),
             swap_layouts,
+            self.debug,
         );
         self.tabs.insert(tab_index, tab);
         Ok(())
@@ -1511,6 +1514,7 @@ pub(crate) fn screen_thread_main(
     max_panes: Option<usize>,
     client_attributes: ClientAttributes,
     config_options: Box<Options>,
+    debug: bool,
 ) -> Result<()> {
     let capabilities = config_options.simplified_ui;
     let draw_pane_frames = config_options.pane_frames.unwrap_or(true);
@@ -1537,6 +1541,7 @@ pub(crate) fn screen_thread_main(
         auto_layout,
         session_is_mirrored,
         copy_options,
+        debug,
     );
 
     let mut command_rerun_history: HashMap<RunCommand, u16> = HashMap::new();
@@ -2578,14 +2583,10 @@ pub(crate) fn screen_thread_main(
                     size,
                 ))?;
             },
-            ScreenInstruction::StartOrReloadPluginPane(run_plugin_location, pane_title) => {
+            ScreenInstruction::StartOrReloadPluginPane(run_plugin, pane_title) => {
                 let tab_index = screen.active_tab_indices.values().next().unwrap_or(&1);
                 let size = Size::default();
                 let should_float = Some(false);
-                let run_plugin = RunPlugin {
-                    _allow_exec_host_cmd: false,
-                    location: run_plugin_location,
-                };
                 screen
                     .bus
                     .senders
