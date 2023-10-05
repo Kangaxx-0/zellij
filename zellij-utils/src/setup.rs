@@ -16,7 +16,7 @@ use crate::{
 };
 use clap::{Args, IntoApp};
 use clap_complete::Shell;
-use directories_next::BaseDirs;
+use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom, fmt::Write as FmtWrite, io::Write, path::Path, path::PathBuf, process,
@@ -68,7 +68,7 @@ fn get_default_themes() -> Themes {
     let mut themes = Themes::default();
     for file in ZELLIJ_DEFAULT_THEMES.files() {
         if let Some(content) = file.contents_utf8() {
-            match Themes::from_string(content.to_string()) {
+            match Themes::from_string(&content.to_string()) {
                 Ok(theme) => themes = themes.merge(theme),
                 Err(_) => {},
             }

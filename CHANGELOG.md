@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 * feat(panes): start panes/editors/commands/plugins in-place (https://github.com/zellij-org/zellij/pull/2795)
+* fix(theme): fg color for gruvbox light theme (https://github.com/zellij-org/zellij/pull/2791)
+* fix: display parsing error for kdl files located under the 'themes' directory (https://github.com/zellij-org/zellij/pull/2762)
+* refactor(plugins): wasmer v3.1.1 (https://github.com/zellij-org/zellij/pull/2706)
+* refactor(config): dependency updates (https://github.com/zellij-org/zellij/pull/2820 and https://github.com/zellij-org/zellij/pull/2821)
+* fix(plugins): address cranelift-codegen vulnerability (https://github.com/zellij-org/zellij/pull/2830)
 
 ## [0.38.2] - 2023-09-15
 * fix(terminal): wrap lines in alternate screen mode when adding characters (https://github.com/zellij-org/zellij/pull/2789)
