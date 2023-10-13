@@ -1,9 +1,9 @@
-use crate::panes::PaneId;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use zellij_utils::common_path::common_path_all;
 use zellij_utils::pane_size::PaneGeom;
 use zellij_utils::{
+    data::PaneId,
     input::command::RunCommand,
     input::layout::{Layout, Run, RunPlugin},
     session_serialization::{GlobalLayoutManifest, PaneLayoutManifest, TabLayoutManifest},

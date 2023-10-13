@@ -7,8 +7,8 @@ use std::rc::Rc;
 use std::str;
 
 use zellij_utils::data::{
-    Direction, PaneManifest, PaneToResizeByPercent, PluginPermission, Resize, ResizeByPercent,
-    ResizeStrategy, SessionInfo,
+    Direction, PaneManifest, PaneToResizeByPercent, PluginPermission, Resize, ResizeStrategy,
+    SessionInfo,
 };
 use zellij_utils::errors::prelude::*;
 use zellij_utils::input::command::RunCommand;

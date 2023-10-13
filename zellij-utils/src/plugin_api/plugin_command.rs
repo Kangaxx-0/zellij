@@ -14,7 +14,7 @@ pub use super::generated_api::api::{
 };
 
 use crate::data::{
-    ConnectToSession, PaneId, PaneToResizeByPercent, PermissionType, PluginCommand, ResizeByPercent,
+    ConnectToSession, PaneToResizeByPercent, PermissionType, PluginCommand, ResizeByPercent,
 };
 
 use std::convert::TryFrom;
