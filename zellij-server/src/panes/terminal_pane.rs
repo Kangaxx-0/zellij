@@ -709,8 +709,8 @@ impl Pane for TerminalPane {
             .as_ref()
             .map(|(color, _text)| *color)
     }
-    fn invoked_with(&self) -> &Option<Run> {
-        &self.invoked_with
+    fn invoked_with(&self) -> Option<&Run> {
+        self.invoked_with.as_ref()
     }
     fn set_title(&mut self, title: String) {
         self.pane_title = title;
@@ -724,6 +724,13 @@ impl Pane for TerminalPane {
                 .into()
         } else {
             self.pane_name.to_owned()
+        }
+    }
+    fn custom_title(&self) -> Option<String> {
+        if self.pane_name.is_empty() {
+            None
+        } else {
+            Some(self.pane_name.clone())
         }
     }
     fn exit_status(&self) -> Option<i32> {
@@ -743,6 +750,9 @@ impl Pane for TerminalPane {
     fn rename(&mut self, buf: Vec<u8>) {
         self.pane_name = String::from_utf8_lossy(&buf).to_string();
         self.set_should_render(true);
+    }
+    fn serialize(&self, scrollback_lines_to_serialize: Option<usize>) -> Option<String> {
+        self.grid.serialize(scrollback_lines_to_serialize)
     }
 }
 

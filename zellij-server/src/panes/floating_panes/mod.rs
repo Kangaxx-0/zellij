@@ -157,7 +157,7 @@ impl FloatingPanes {
 
         // move clients from the previously active pane to the new pane we just inserted
         self.move_clients_between_panes(pane_id, with_pane_id);
-        self.set_pane_frames();
+        let _ = self.set_pane_frames();
         removed_pane
     }
     pub fn remove_pane(&mut self, pane_id: PaneId) -> Option<Box<dyn Pane>> {
@@ -631,7 +631,7 @@ impl FloatingPanes {
     pub fn move_active_pane(
         &mut self,
         search_backwards: bool,
-        os_api: &mut Box<dyn ServerOsApi>,
+        _os_api: &mut Box<dyn ServerOsApi>,
         client_id: ClientId,
     ) {
         let active_pane_id = self.get_active_pane_id(client_id).unwrap();
@@ -904,7 +904,7 @@ impl FloatingPanes {
         let run = Some(Run::Plugin(run_plugin.clone()));
         self.panes
             .iter()
-            .find(|(_id, s_p)| s_p.invoked_with() == &run)
+            .find(|(_id, s_p)| s_p.invoked_with() == run.as_ref())
             .map(|(id, _)| *id)
     }
     pub fn focus_pane_if_exists(&mut self, pane_id: PaneId, client_id: ClientId) -> Result<()> {
@@ -932,7 +932,7 @@ impl FloatingPanes {
         match self
             .panes
             .iter_mut()
-            .find(|(_, p)| p.invoked_with() == &run)
+            .find(|(_, p)| p.invoked_with() == run.as_ref())
         {
             Some((_, pane)) => {
                 pane.set_geom(geom);

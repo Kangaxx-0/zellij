@@ -579,8 +579,8 @@ impl Pane for PluginPane {
             .as_ref()
             .map(|(color, _text)| *color)
     }
-    fn invoked_with(&self) -> &Option<Run> {
-        &self.invoked_with
+    fn invoked_with(&self) -> Option<&Run> {
+        self.invoked_with.as_ref()
     }
     fn set_title(&mut self, title: String) {
         self.pane_title = title;
@@ -614,6 +614,13 @@ impl Pane for PluginPane {
             self.pane_title.to_owned()
         } else {
             self.pane_name.to_owned()
+        }
+    }
+    fn custom_title(&self) -> Option<String> {
+        if self.pane_name.is_empty() {
+            None
+        } else {
+            Some(self.pane_name.clone())
         }
     }
     fn rename(&mut self, buf: Vec<u8>) {
