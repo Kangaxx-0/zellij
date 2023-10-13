@@ -3,7 +3,7 @@ use zellij_utils::consts::{
     session_info_cache_file_name, session_info_folder_for_session, session_layout_cache_file_name,
     ZELLIJ_SOCK_DIR,
 };
-use zellij_utils::data::SessionInfo;
+use zellij_utils::data::{PaneId, SessionInfo};
 use zellij_utils::errors::{prelude::*, BackgroundJobContext, ContextType};
 
 use std::collections::{BTreeMap, HashMap};
