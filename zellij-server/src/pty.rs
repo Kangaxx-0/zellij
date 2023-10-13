@@ -1,7 +1,6 @@
 use crate::background_jobs::BackgroundJob;
 use crate::terminal_bytes::TerminalBytes;
 use crate::{
-    panes::PaneId,
     plugins::PluginInstruction,
     screen::ScreenInstruction,
     session_layout_metadata::SessionLayoutMetadata,
@@ -13,6 +12,7 @@ use std::{collections::HashMap, os::unix::io::RawFd, path::PathBuf};
 use zellij_utils::nix::unistd::Pid;
 use zellij_utils::{
     async_std,
+    data::PaneId,
     errors::prelude::*,
     errors::{ContextType, PtyContext},
     input::{

@@ -16,7 +16,6 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-use crate::panes::PaneId;
 use crate::screen::ScreenInstruction;
 use crate::thread_bus::Bus;
 

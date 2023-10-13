@@ -14,7 +14,6 @@ use std::{
 };
 use wasmer::Store;
 
-use crate::panes::PaneId;
 use crate::screen::ScreenInstruction;
 use crate::session_layout_metadata::SessionLayoutMetadata;
 use crate::{pty::PtyInstruction, thread_bus::Bus, ClientId, ServerInstruction};
@@ -23,7 +22,7 @@ use wasm_bridge::WasmBridge;
 
 use zellij_utils::{
     async_std::{channel, future::timeout, task},
-    data::{Event, EventType, PermissionStatus, PermissionType, PluginCapabilities},
+    data::{Event, EventType, PaneId, PermissionStatus, PermissionType, PluginCapabilities},
     errors::{prelude::*, ContextType, PluginContext},
     input::{
         command::TerminalAction,
