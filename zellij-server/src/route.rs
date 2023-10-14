@@ -4,7 +4,6 @@ use std::sync::{Arc, RwLock};
 use crate::thread_bus::ThreadSenders;
 use crate::{
     os_input_output::ServerOsApi,
-    panes::PaneId,
     plugins::PluginInstruction,
     pty::{ClientTabIndexOrPaneId, PtyInstruction},
     screen::ScreenInstruction,
@@ -12,7 +11,7 @@ use crate::{
 };
 use zellij_utils::{
     channels::SenderWithContext,
-    data::{Direction, Event, PluginCapabilities, ResizeStrategy},
+    data::{Direction, Event, PaneId, PluginCapabilities, ResizeStrategy},
     errors::prelude::*,
     input::{
         actions::{Action, SearchDirection, SearchOption},
@@ -171,6 +170,15 @@ pub(crate) fn route_action(
         Action::DumpScreen(val, full) => {
             senders
                 .send_to_screen(ScreenInstruction::DumpScreen(val, client_id, full))
+                .with_context(err_context)?;
+        },
+        Action::DumpLayout => {
+            let default_shell = match default_shell {
+                Some(TerminalAction::RunCommand(run_command)) => Some(run_command.command),
+                _ => None,
+            };
+            senders
+                .send_to_screen(ScreenInstruction::DumpLayout(default_shell, client_id))
                 .with_context(err_context)?;
         },
         Action::EditScrollback => {

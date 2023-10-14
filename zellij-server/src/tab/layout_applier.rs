@@ -7,7 +7,7 @@ use crate::{
     os_input_output::ServerOsApi,
     panes::sixel::SixelImageStore,
     panes::{FloatingPanes, TiledPanes},
-    panes::{LinkHandler, PaneId, PluginPane, TerminalPane},
+    panes::{LinkHandler, PluginPane, TerminalPane},
     plugins::PluginInstruction,
     pty::PtyInstruction,
     thread_bus::ThreadSenders,
@@ -17,7 +17,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 use zellij_utils::{
-    data::{Palette, Style},
+    data::{Palette, PaneId, Style},
     input::layout::{
         FloatingPaneLayout, PluginUserConfiguration, Run, RunPluginLocation, TiledPaneLayout,
     },
@@ -101,8 +101,9 @@ impl<'a> LayoutApplier<'a> {
         mut new_plugin_ids: HashMap<(RunPluginLocation, PluginUserConfiguration), Vec<u32>>,
         client_id: ClientId,
     ) -> Result<bool> {
-        // true => layout has floating panes
+        // true => should_show_floating_panes
         let layout_name = layout.name.clone();
+        let hide_floating_panes = layout.hide_floating_panes;
         self.apply_tiled_panes_layout(layout, new_terminal_ids, &mut new_plugin_ids, client_id)?;
         let layout_has_floating_panes = self.apply_floating_panes_layout(
             floating_panes_layout,
@@ -110,7 +111,8 @@ impl<'a> LayoutApplier<'a> {
             &mut new_plugin_ids,
             layout_name,
         )?;
-        return Ok(layout_has_floating_panes);
+        let should_show_floating_panes = layout_has_floating_panes && !hide_floating_panes;
+        return Ok(should_show_floating_panes);
     }
     pub fn apply_tiled_panes_layout_to_existing_panes(
         &mut self,
@@ -132,7 +134,7 @@ impl<'a> LayoutApplier<'a> {
                 for (layout, position_and_size) in positions_in_layout {
                     // first try to find panes with contents matching the layout exactly
                     match existing_tab_state.find_and_extract_exact_match_pane(
-                        &layout.run,
+                        layout.run.as_ref(),
                         &position_and_size,
                         true,
                     ) {
@@ -157,7 +159,7 @@ impl<'a> LayoutApplier<'a> {
                 for (layout, position_and_size) in positions_left {
                     // now let's try to find panes on a best-effort basis
                     if let Some(mut pane) = existing_tab_state.find_and_extract_pane(
-                        &layout.run,
+                        layout.run.as_ref(),
                         &position_and_size,
                         layout.focus.unwrap_or(false),
                         true,
@@ -255,6 +257,11 @@ impl<'a> LayoutApplier<'a> {
                             layout.run.clone(),
                             self.debug,
                         );
+                        if let Some(pane_initial_contents) = &layout.pane_initial_contents {
+                            new_plugin.handle_pty_bytes(pane_initial_contents.as_bytes().into());
+                            new_plugin.handle_pty_bytes("\n\r".as_bytes().into());
+                        }
+
                         new_plugin.set_borderless(layout.borderless);
                         if let Some(exclude_from_sync) = layout.exclude_from_sync {
                             new_plugin.set_exclude_from_sync(exclude_from_sync);
@@ -286,6 +293,10 @@ impl<'a> LayoutApplier<'a> {
                                 layout.run.clone(),
                                 self.debug,
                             );
+                            if let Some(pane_initial_contents) = &layout.pane_initial_contents {
+                                new_pane.handle_pty_bytes(pane_initial_contents.as_bytes().into());
+                                new_pane.handle_pty_bytes("\n\r".as_bytes().into());
+                            }
                             new_pane.set_borderless(layout.borderless);
                             if let Some(exclude_from_sync) = layout.exclude_from_sync {
                                 new_pane.set_exclude_from_sync(exclude_from_sync);
@@ -371,6 +382,10 @@ impl<'a> LayoutApplier<'a> {
                     floating_pane_layout.run.clone(),
                     self.debug,
                 );
+                if let Some(pane_initial_contents) = &floating_pane_layout.pane_initial_contents {
+                    new_pane.handle_pty_bytes(pane_initial_contents.as_bytes().into());
+                    new_pane.handle_pty_bytes("\n\r".as_bytes().into());
+                }
                 new_pane.set_borderless(false);
                 new_pane.set_content_offset(Offset::frame(1));
                 resize_pty!(
@@ -406,6 +421,10 @@ impl<'a> LayoutApplier<'a> {
                     floating_pane_layout.run.clone(),
                     self.debug,
                 );
+                if let Some(pane_initial_contents) = &floating_pane_layout.pane_initial_contents {
+                    new_pane.handle_pty_bytes(pane_initial_contents.as_bytes().into());
+                    new_pane.handle_pty_bytes("\n\r".as_bytes().into());
+                }
                 new_pane.set_borderless(false);
                 new_pane.set_content_offset(Offset::frame(1));
                 if let Some(held_command) = hold_for_command {
@@ -459,7 +478,7 @@ impl<'a> LayoutApplier<'a> {
                 .position_floating_pane_layout(&floating_pane_layout);
             let is_focused = floating_pane_layout.focus.unwrap_or(false);
             if let Some(mut pane) = existing_tab_state.find_and_extract_pane(
-                &floating_pane_layout.run,
+                floating_pane_layout.run.as_ref(),
                 &position_and_size,
                 is_focused,
                 false,
@@ -657,7 +676,7 @@ impl ExistingTabState {
     }
     pub fn find_and_extract_exact_match_pane(
         &mut self,
-        run: &Option<Run>,
+        run: Option<&Run>,
         position_and_size: &PaneGeom,
         default_to_closest_position: bool,
     ) -> Option<Box<dyn Pane>> {
@@ -673,7 +692,7 @@ impl ExistingTabState {
     }
     pub fn find_and_extract_pane(
         &mut self,
-        run: &Option<Run>,
+        run: Option<&Run>,
         position_and_size: &PaneGeom,
         is_focused: bool,
         default_to_closest_position: bool,
@@ -711,7 +730,7 @@ impl ExistingTabState {
     }
     fn pane_candidates(
         &self,
-        run: &Option<Run>,
+        run: Option<&Run>,
         position_and_size: &PaneGeom,
         default_to_closest_position: bool,
     ) -> Vec<(&PaneId, &Box<dyn Pane>)> {
@@ -768,7 +787,7 @@ impl ExistingTabState {
     fn find_pane_id_with_same_contents(
         &self,
         candidates: &Vec<(&PaneId, &Box<dyn Pane>)>,
-        run: &Option<Run>,
+        run: Option<&Run>,
     ) -> Option<PaneId> {
         candidates
             .iter()
@@ -779,7 +798,7 @@ impl ExistingTabState {
     fn find_pane_id_with_same_contents_and_location(
         &self,
         candidates: &Vec<(&PaneId, &Box<dyn Pane>)>,
-        run: &Option<Run>,
+        run: Option<&Run>,
         position: &PaneGeom,
     ) -> Option<PaneId> {
         candidates

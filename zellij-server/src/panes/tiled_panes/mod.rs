@@ -8,7 +8,7 @@ use tiled_pane_grid::{split, TiledPaneGrid, RESIZE_PERCENT};
 use crate::{
     os_input_output::ServerOsApi,
     output::Output,
-    panes::{ActivePanes, PaneId},
+    panes::ActivePanes,
     plugins::PluginInstruction,
     tab::{pane_info_for_pane, Pane, MIN_TERMINAL_HEIGHT, MIN_TERMINAL_WIDTH},
     thread_bus::ThreadSenders,
@@ -18,7 +18,7 @@ use crate::{
 };
 use stacked_panes::StackedPanes;
 use zellij_utils::{
-    data::{Direction, ModeInfo, PaneInfo, ResizeStrategy, Style},
+    data::{Direction, ModeInfo, PaneId, PaneInfo, ResizeStrategy, Style},
     errors::prelude::*,
     input::{
         command::RunCommand,
@@ -763,7 +763,7 @@ impl TiledPanes {
         match self
             .panes
             .iter_mut()
-            .find(|(_, p)| p.invoked_with() == &run)
+            .find(|(_, p)| p.invoked_with() == run.as_ref())
         {
             Some((_, pane)) => {
                 pane.set_geom(geom);
@@ -1748,7 +1748,7 @@ impl TiledPanes {
         let run = Some(Run::Plugin(run_plugin.clone()));
         self.panes
             .iter()
-            .find(|(_id, s_p)| s_p.invoked_with() == &run)
+            .find(|(_id, s_p)| s_p.invoked_with() == run.as_ref())
             .map(|(id, _)| *id)
     }
     pub fn pane_info(&self) -> Vec<PaneInfo> {

@@ -10,6 +10,12 @@ use strum_macros::{Display, EnumDiscriminants, EnumIter, EnumString, ToString};
 
 pub type ClientId = u16; // TODO: merge with crate type?
 
+#[derive(PartialEq, Eq, Ord, PartialOrd, Hash, Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum PaneId {
+    Terminal(u32),
+    Plugin(u32), // FIXME: Drop the trait object, make this a wrapper for the struct?
+}
+
 pub fn client_id_to_colors(
     client_id: ClientId,
     colors: Palette,
@@ -248,6 +254,21 @@ impl FromStr for Direction {
             )),
         }
     }
+}
+
+/// Resize a floating pane by given tab position, pane id and size
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct PaneToResizeByPercent {
+    pub tab_position: Option<u32>,
+    pub pane_id: Option<PaneId>,
+    pub resize: ResizeByPercent,
+}
+
+/// Resize by percent
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct ResizeByPercent {
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Resize operation to perform.
@@ -1064,4 +1085,5 @@ pub enum PluginCommand {
     OpenTerminalInPlace(FileToOpen), // only used for the path as cwd
     OpenFileInPlace(FileToOpen),
     OpenCommandPaneInPlace(CommandToRun),
+    ResizeFloatingPaneByPercent(PaneToResizeByPercent),
 }

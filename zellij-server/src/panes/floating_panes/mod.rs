@@ -1,6 +1,6 @@
 mod floating_pane_grid;
 use zellij_utils::{
-    data::{Direction, PaneInfo, ResizeStrategy},
+    data::{Direction, PaneInfo, ResizeByPercent, ResizeStrategy},
     position::Position,
 };
 
@@ -11,7 +11,7 @@ use floating_pane_grid::FloatingPaneGrid;
 use crate::{
     os_input_output::ServerOsApi,
     output::{FloatingPanesStack, Output},
-    panes::{ActivePanes, PaneId},
+    panes::ActivePanes,
     plugins::PluginInstruction,
     thread_bus::ThreadSenders,
     ui::pane_contents_and_ui::PaneContentsAndUi,
@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 use std::time::Instant;
 use zellij_utils::{
-    data::{ModeInfo, Style},
+    data::{ModeInfo, PaneId, Style},
     errors::prelude::*,
     input::command::RunCommand,
     input::layout::{FloatingPaneLayout, Run, RunPlugin},
@@ -157,7 +157,7 @@ impl FloatingPanes {
 
         // move clients from the previously active pane to the new pane we just inserted
         self.move_clients_between_panes(pane_id, with_pane_id);
-        self.set_pane_frames();
+        let _ = self.set_pane_frames();
         removed_pane
     }
     pub fn remove_pane(&mut self, pane_id: PaneId) -> Option<Box<dyn Pane>> {
@@ -438,6 +438,34 @@ impl FloatingPanes {
         Ok(false)
     }
 
+    pub fn resize_floating_pane(
+        &mut self,
+        pane_id: PaneId,
+        _os_api: &mut Box<dyn ServerOsApi>,
+        pane_with_size: ResizeByPercent,
+    ) -> Result<bool> {
+        let err_context =
+            || format!("failed to resize active floating pane for pane id {pane_id:?}");
+        let display_area = *self.display_area.borrow();
+        let viewport = *self.viewport.borrow();
+        let mut floating_pane_grid = FloatingPaneGrid::new(
+            &mut self.panes,
+            &mut self.desired_pane_positions,
+            display_area,
+            viewport,
+        );
+        floating_pane_grid
+            .change_pane_size_by_percent(pane_id, pane_with_size)
+            .with_context(err_context)?;
+
+        for pane in self.panes.values_mut() {
+            resize_pty!(pane, os_api, self.senders, self.character_cell_size)
+                .with_context(err_context)?;
+        }
+        self.set_force_render();
+        return Ok(true);
+    }
+
     fn set_pane_active_at(&mut self, pane_id: PaneId) {
         if let Some(pane) = self.panes.get_mut(&pane_id) {
             pane.set_active_at(Instant::now());
@@ -603,7 +631,7 @@ impl FloatingPanes {
     pub fn move_active_pane(
         &mut self,
         search_backwards: bool,
-        os_api: &mut Box<dyn ServerOsApi>,
+        _os_api: &mut Box<dyn ServerOsApi>,
         client_id: ClientId,
     ) {
         let active_pane_id = self.get_active_pane_id(client_id).unwrap();
@@ -876,7 +904,7 @@ impl FloatingPanes {
         let run = Some(Run::Plugin(run_plugin.clone()));
         self.panes
             .iter()
-            .find(|(_id, s_p)| s_p.invoked_with() == &run)
+            .find(|(_id, s_p)| s_p.invoked_with() == run.as_ref())
             .map(|(id, _)| *id)
     }
     pub fn focus_pane_if_exists(&mut self, pane_id: PaneId, client_id: ClientId) -> Result<()> {
@@ -904,7 +932,7 @@ impl FloatingPanes {
         match self
             .panes
             .iter_mut()
-            .find(|(_, p)| p.invoked_with() == &run)
+            .find(|(_, p)| p.invoked_with() == run.as_ref())
         {
             Some((_, pane)) => {
                 pane.set_geom(geom);
