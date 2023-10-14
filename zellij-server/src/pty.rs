@@ -142,7 +142,7 @@ pub(crate) fn pty_thread_main(mut pty: Pty, layout: Box<Layout>) -> Result<()> {
                     .spawn_terminal(terminal_action, client_or_tab_index)
                     .with_context(err_context)
                 {
-                    Ok((pid, starts_held)) => {
+                    Ok((terminal_id, starts_held)) => {
                         let hold_for_command = if starts_held {
                             run_command.clone()
                         } else {
