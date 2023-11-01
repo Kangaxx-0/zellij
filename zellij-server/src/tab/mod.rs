@@ -2062,9 +2062,13 @@ impl Tab {
         let err_context = || format!("unable to resize float pane {pane_id:?} by given size");
 
         self.swap_layouts.set_is_floating_damaged();
-        self.floating_panes
+        let ret_resize = self
+            .floating_panes
             .resize_floating_pane(pane_id, &mut self.os_api, new_size)
             .with_context(err_context)?;
+        if ret_resize {
+            self.set_force_render();
+        }
         Ok(())
     }
 
@@ -2371,7 +2375,6 @@ impl Tab {
                 self.hide_floating_panes();
             }
             self.set_force_render();
-            self.floating_panes.set_force_render();
             if self.auto_layout
                 && !self.swap_layouts.is_floating_damaged()
                 && self.floating_panes.visible_panes_count() > 0
@@ -2388,7 +2391,6 @@ impl Tab {
             }
             let closed_pane = self.tiled_panes.remove_pane(id);
             self.set_force_render();
-            self.tiled_panes.set_force_render();
             if self.auto_layout && !self.swap_layouts.is_tiled_damaged() {
                 self.swap_layouts.set_is_tiled_damaged();
                 // only relayout if the user is already "in" a layout, otherwise this might be
@@ -2410,7 +2412,6 @@ impl Tab {
                 self.hide_floating_panes();
             }
             self.set_force_render();
-            self.floating_panes.set_force_render();
             if self.auto_layout
                 && !self.swap_layouts.is_floating_damaged()
                 && self.floating_panes.visible_panes_count() > 0
@@ -2427,7 +2428,6 @@ impl Tab {
             }
             let closed_pane = self.tiled_panes.remove_pane(id);
             self.set_force_render();
-            self.tiled_panes.set_force_render();
             if self.auto_layout && !self.swap_layouts.is_tiled_damaged() {
                 self.swap_layouts.set_is_tiled_damaged();
                 // only relayout if the user is already "in" a layout, otherwise this might be
