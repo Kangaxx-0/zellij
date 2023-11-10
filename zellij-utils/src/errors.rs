@@ -336,6 +336,7 @@ pub enum ScreenContext {
     StartPluginLoadingIndication,
     RequestStateUpdateForPlugins,
     LaunchOrFocusPlugin,
+    LaunchPlugin,
     SuppressPane,
     FocusPaneWithId,
     RenamePane,
@@ -348,6 +349,7 @@ pub enum ScreenContext {
     ReplacePane,
     NewInPlacePluginPane,
     DumpLayoutToHd,
+    RenameSession,
 }
 
 /// Stack call representations corresponding to the different types of [`PtyInstruction`]s.
@@ -363,9 +365,11 @@ pub enum PtyContext {
     ClosePane,
     CloseTab,
     ReRunCommandInPane,
+    DropToShellInPane,
     SpawnInPlaceTerminal,
     DumpLayout,
     LogLayoutToHd,
+    FillPluginCwd,
     Exit,
 }
 
@@ -404,10 +408,12 @@ pub enum ClientContext {
     Connected,
     ActiveClients,
     Log,
+    LogError,
     OwnClientId,
     StartedParsingStdinQuery,
     DoneParsingStdinQuery,
     SwitchSession,
+    SetSynchronisedOutput,
 }
 
 /// Stack call representations corresponding to the different types of [`ServerInstruction`]s.
@@ -445,6 +451,8 @@ pub enum BackgroundJobContext {
     ReadAllSessionInfosOnMachine,
     ReportSessionInfo,
     ReportLayoutInfo,
+    RunCommand,
+    WebRequest,
     Exit,
 }
 

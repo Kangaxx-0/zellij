@@ -48,6 +48,7 @@ impl ZellijPlugin for State {
             PermissionType::RunCommands,
             PermissionType::OpenTerminalsOrPlugins,
             PermissionType::WriteToStdin,
+            PermissionType::WebAccess,
         ]);
         self.configuration = configuration;
         subscribe(&[
@@ -239,6 +240,39 @@ impl ZellijPlugin for State {
                 },
                 Key::Ctrl('1') => {
                     request_permission(&[PermissionType::ReadApplicationState]);
+                },
+                Key::Ctrl('2') => {
+                    let mut context = BTreeMap::new();
+                    context.insert("user_key_1".to_owned(), "user_value_1".to_owned());
+                    run_command(&["ls", "-l"], context);
+                },
+                Key::Ctrl('3') => {
+                    let mut context = BTreeMap::new();
+                    context.insert("user_key_2".to_owned(), "user_value_2".to_owned());
+                    let mut env_vars = BTreeMap::new();
+                    env_vars.insert("VAR1".to_owned(), "some_value".to_owned());
+                    run_command_with_env_variables_and_cwd(
+                        &["ls", "-l"],
+                        env_vars,
+                        std::path::PathBuf::from("/some/custom/folder"),
+                        context,
+                    );
+                },
+                Key::Ctrl('4') => {
+                    let mut headers = BTreeMap::new();
+                    let mut context = BTreeMap::new();
+                    let body = vec![1, 2, 3];
+                    headers.insert("header1".to_owned(), "value1".to_owned());
+                    headers.insert("header2".to_owned(), "value2".to_owned());
+                    context.insert("user_key_1".to_owned(), "user_value1".to_owned());
+                    context.insert("user_key_2".to_owned(), "user_value2".to_owned());
+                    web_request(
+                        "https://example.com/foo?arg1=val1&arg2=val2",
+                        HttpVerb::Post,
+                        headers,
+                        body,
+                        context,
+                    );
                 },
                 _ => {},
             },

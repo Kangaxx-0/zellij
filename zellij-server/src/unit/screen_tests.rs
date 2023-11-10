@@ -9,7 +9,7 @@ use crate::{
 use insta::assert_snapshot;
 use std::path::PathBuf;
 use zellij_utils::cli::CliAction;
-use zellij_utils::data::{Event, PaneId, Resize};
+use zellij_utils::data::{Event, PaneId, Resize, Style};
 use zellij_utils::errors::{prelude::*, ErrorContext};
 use zellij_utils::input::actions::Action;
 use zellij_utils::input::command::{RunCommand, TerminalAction};
@@ -66,6 +66,8 @@ fn take_snapshots_and_cursor_coordinates_from_render_events<'a>(
         height: 21,
     })));
     let debug = false;
+    let arrow_fonts = true;
+    let styled_underlines = true;
     let mut grid = Grid::new(
         screen_size.rows,
         screen_size.cols,
@@ -74,7 +76,10 @@ fn take_snapshots_and_cursor_coordinates_from_render_events<'a>(
         Rc::new(RefCell::new(LinkHandler::new())),
         character_cell_size,
         sixel_image_store,
+        Style::default(),
         debug,
+        arrow_fonts,
+        styled_underlines,
     );
     let snapshots: Vec<(Option<(usize, usize)>, String)> = all_events
         .filter_map(|server_instruction| {
@@ -240,6 +245,8 @@ fn create_new_screen(size: Size) -> Screen {
     let scrollback_lines_to_serialize = None;
 
     let debug = false;
+    let styled_underlines = true;
+    let arrow_fonts = true;
     let screen = Screen::new(
         bus,
         &client_attributes,
@@ -255,6 +262,8 @@ fn create_new_screen(size: Size) -> Screen {
         session_serialization,
         serialize_pane_viewport,
         scrollback_lines_to_serialize,
+        styled_underlines,
+        arrow_fonts,
     );
     screen
 }
@@ -2573,14 +2582,14 @@ pub fn send_cli_launch_or_focus_plugin_action() {
     };
     let client_id = 10; // fake client id should not appear in the screen's state
     let mut mock_screen = MockScreen::new(size);
-    let plugin_receiver = mock_screen.plugin_receiver.take().unwrap();
+    let pty_receiver = mock_screen.pty_receiver.take().unwrap();
     let session_metadata = mock_screen.clone_session_metadata();
     let screen_thread = mock_screen.run(None, vec![]);
-    let received_plugin_instructions = Arc::new(Mutex::new(vec![]));
-    let plugin_thread = log_actions_in_thread!(
-        received_plugin_instructions,
-        PluginInstruction::Exit,
-        plugin_receiver
+    let received_pty_instructions = Arc::new(Mutex::new(vec![]));
+    let pty_thread = log_actions_in_thread!(
+        received_pty_instructions,
+        PtyInstruction::Exit,
+        pty_receiver
     );
     let cli_action = CliAction::LaunchOrFocusPlugin {
         floating: true,
@@ -2591,19 +2600,19 @@ pub fn send_cli_launch_or_focus_plugin_action() {
     };
     send_cli_action_to_server(&session_metadata, cli_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100)); // give time for actions to be
-    mock_screen.teardown(vec![plugin_thread, screen_thread]);
+    mock_screen.teardown(vec![pty_thread, screen_thread]);
 
-    let plugin_load_instruction = received_plugin_instructions
+    let pty_fill_plugin_cwd_instruction = received_pty_instructions
         .lock()
         .unwrap()
         .iter()
         .find(|instruction| match instruction {
-            PluginInstruction::Load(..) => true,
+            PtyInstruction::FillPluginCwd(..) => true,
             _ => false,
         })
         .cloned();
 
-    assert_snapshot!(format!("{:#?}", plugin_load_instruction));
+    assert_snapshot!(format!("{:#?}", pty_fill_plugin_cwd_instruction));
 }
 
 #[test]

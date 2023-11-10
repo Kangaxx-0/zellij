@@ -18,10 +18,11 @@ use zellij_utils::{
     input::{
         command::{RunCommand, TerminalAction},
         layout::{
-            FloatingPaneLayout, Layout, PluginUserConfiguration, Run, RunPluginLocation,
+            FloatingPaneLayout, Layout, PluginUserConfiguration, Run, RunPlugin, RunPluginLocation,
             TiledPaneLayout,
         },
     },
+    pane_size::Size,
     session_serialization,
 };
 
@@ -66,6 +67,11 @@ pub enum PtyInstruction {
     ClosePane(PaneId),
     CloseTab(Vec<PaneId>),
     ReRunCommandInPane(PaneId, RunCommand),
+    DropToShellInPane {
+        pane_id: PaneId,
+        shell: Option<PathBuf>,
+        working_dir: Option<PathBuf>,
+    },
     SpawnInPlaceTerminal(
         Option<TerminalAction>,
         Option<String>,
@@ -73,6 +79,16 @@ pub enum PtyInstruction {
     ), // String is an optional pane name
     DumpLayout(SessionLayoutMetadata, ClientId),
     LogLayoutToHd(SessionLayoutMetadata),
+    FillPluginCwd(
+        Option<bool>,   // should float
+        bool,           // should be opened in place
+        Option<String>, // pane title
+        RunPlugin,
+        usize,          // tab index
+        Option<PaneId>, // pane id to replace if this is to be opened "in-place"
+        ClientId,
+        Size,
+    ),
     Exit,
 }
 
@@ -89,9 +105,11 @@ impl From<&PtyInstruction> for PtyContext {
             PtyInstruction::CloseTab(_) => PtyContext::CloseTab,
             PtyInstruction::NewTab(..) => PtyContext::NewTab,
             PtyInstruction::ReRunCommandInPane(..) => PtyContext::ReRunCommandInPane,
+            PtyInstruction::DropToShellInPane { .. } => PtyContext::DropToShellInPane,
             PtyInstruction::SpawnInPlaceTerminal(..) => PtyContext::SpawnInPlaceTerminal,
             PtyInstruction::DumpLayout(..) => PtyContext::DumpLayout,
             PtyInstruction::LogLayoutToHd(..) => PtyContext::LogLayoutToHd,
+            PtyInstruction::FillPluginCwd(..) => PtyContext::FillPluginCwd,
             PtyInstruction::Exit => PtyContext::Exit,
         }
     }
@@ -532,26 +550,120 @@ pub(crate) fn pty_thread_main(mut pty: Pty, layout: Box<Layout>) -> Result<()> {
                     },
                 }
             },
+            PtyInstruction::DropToShellInPane {
+                pane_id,
+                shell,
+                working_dir,
+            } => {
+                let err_context = || format!("failed to rerun command in pane {:?}", pane_id);
+
+                // TODO: get configured default_shell from screen/tab as an option and default to
+                // this otherwise (also look for a place that turns get_default_shell into a
+                // RunCommand, we might have done this before)
+                let run_command = RunCommand {
+                    command: shell.unwrap_or_else(|| get_default_shell()),
+                    hold_on_close: false,
+                    hold_on_start: false,
+                    cwd: working_dir,
+                    ..Default::default()
+                };
+                match pty
+                    .rerun_command_in_pane(pane_id, run_command.clone())
+                    .with_context(err_context)
+                {
+                    Ok(..) => {},
+                    Err(err) => match err.downcast_ref::<ZellijError>() {
+                        Some(ZellijError::CommandNotFound { terminal_id, .. }) => {
+                            if run_command.hold_on_close {
+                                pty.bus
+                                    .senders
+                                    .send_to_screen(ScreenInstruction::PtyBytes(
+                                        *terminal_id,
+                                        format!(
+                                            "Command not found: {}",
+                                            run_command.command.display()
+                                        )
+                                        .as_bytes()
+                                        .to_vec(),
+                                    ))
+                                    .with_context(err_context)?;
+                                pty.bus
+                                    .senders
+                                    .send_to_screen(ScreenInstruction::HoldPane(
+                                        PaneId::Terminal(*terminal_id),
+                                        Some(2), // exit status
+                                        run_command,
+                                        None,
+                                        None,
+                                    ))
+                                    .with_context(err_context)?;
+                            }
+                        },
+                        _ => Err::<(), _>(err).non_fatal(),
+                    },
+                }
+            },
             PtyInstruction::DumpLayout(mut session_layout_metadata, client_id) => {
                 let err_context = || format!("Failed to dump layout");
                 pty.populate_session_layout_metadata(&mut session_layout_metadata);
-                let (kdl_layout, _pane_contents) =
-                    session_serialization::serialize_session_layout(session_layout_metadata.into());
-                pty.bus
-                    .senders
-                    .send_to_server(ServerInstruction::Log(vec![kdl_layout], client_id))
-                    .with_context(err_context)
-                    .non_fatal();
+                match session_serialization::serialize_session_layout(
+                    session_layout_metadata.into(),
+                ) {
+                    Ok((kdl_layout, _pane_contents)) => {
+                        pty.bus
+                            .senders
+                            .send_to_server(ServerInstruction::Log(vec![kdl_layout], client_id))
+                            .with_context(err_context)
+                            .non_fatal();
+                    },
+                    Err(e) => {
+                        pty.bus
+                            .senders
+                            .send_to_server(ServerInstruction::Log(vec![e.to_owned()], client_id))
+                            .with_context(err_context)
+                            .non_fatal();
+                    },
+                }
             },
             PtyInstruction::LogLayoutToHd(mut session_layout_metadata) => {
                 let err_context = || format!("Failed to dump layout");
                 pty.populate_session_layout_metadata(&mut session_layout_metadata);
-                let kdl_layout =
-                    session_serialization::serialize_session_layout(session_layout_metadata.into());
-                pty.bus
-                    .senders
-                    .send_to_background_jobs(BackgroundJob::ReportLayoutInfo(kdl_layout))
-                    .with_context(err_context)?;
+                match session_serialization::serialize_session_layout(
+                    session_layout_metadata.into(),
+                ) {
+                    Ok(kdl_layout_and_pane_contents) => {
+                        pty.bus
+                            .senders
+                            .send_to_background_jobs(BackgroundJob::ReportLayoutInfo(
+                                kdl_layout_and_pane_contents,
+                            ))
+                            .with_context(err_context)?;
+                    },
+                    Err(e) => {
+                        log::error!("Failed to log layout to HD: {}", e);
+                    },
+                }
+            },
+            PtyInstruction::FillPluginCwd(
+                should_float,
+                should_be_open_in_place,
+                pane_title,
+                run,
+                tab_index,
+                pane_id_to_replace,
+                client_id,
+                size,
+            ) => {
+                pty.fill_plugin_cwd(
+                    should_float,
+                    should_be_open_in_place,
+                    pane_title,
+                    run,
+                    tab_index,
+                    pane_id_to_replace,
+                    client_id,
+                    size,
+                )?;
             },
             PtyInstruction::Exit => break,
         }
@@ -1205,6 +1317,44 @@ impl Pty {
         session_layout_metadata.update_default_shell(get_default_shell());
         session_layout_metadata.update_terminal_commands(terminal_ids_to_commands);
         session_layout_metadata.update_terminal_cwds(terminal_ids_to_cwds);
+    }
+    pub fn fill_plugin_cwd(
+        &self,
+        should_float: Option<bool>,
+        should_open_in_place: bool, // should be opened in place
+        pane_title: Option<String>, // pane title
+        run: RunPlugin,
+        tab_index: usize,                   // tab index
+        pane_id_to_replace: Option<PaneId>, // pane id to replace if this is to be opened "in-place"
+        client_id: ClientId,
+        size: Size,
+    ) -> Result<()> {
+        let cwd = self
+            .active_panes
+            .get(&client_id)
+            .and_then(|pane| match pane {
+                PaneId::Plugin(..) => None,
+                PaneId::Terminal(id) => self.id_to_child_pid.get(id),
+            })
+            .and_then(|&id| {
+                self.bus
+                    .os_input
+                    .as_ref()
+                    .and_then(|input| input.get_cwd(Pid::from_raw(id)))
+            });
+
+        self.bus.senders.send_to_plugin(PluginInstruction::Load(
+            should_float,
+            should_open_in_place,
+            pane_title,
+            run,
+            tab_index,
+            pane_id_to_replace,
+            client_id,
+            size,
+            cwd,
+        ))?;
+        Ok(())
     }
 }
 

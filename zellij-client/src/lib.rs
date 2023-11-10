@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use zellij_utils::errors::FatalError;
 
-use crate::stdin_ansi_parser::{AnsiStdinInstruction, StdinAnsiParser};
+use crate::stdin_ansi_parser::{AnsiStdinInstruction, StdinAnsiParser, SyncOutput};
 use crate::{
     command_is_executing::CommandIsExecuting, input_handler::input_loop,
     os_input_output::ClientOsApi, stdin_handler::stdin_loop,
@@ -46,7 +46,9 @@ pub(crate) enum ClientInstruction {
     StartedParsingStdinQuery,
     DoneParsingStdinQuery,
     Log(Vec<String>),
+    LogError(Vec<String>),
     SwitchSession(ConnectToSession),
+    SetSynchronizedOutput(Option<SyncOutput>),
 }
 
 impl From<ServerToClientMsg> for ClientInstruction {
@@ -61,6 +63,7 @@ impl From<ServerToClientMsg> for ClientInstruction {
             ServerToClientMsg::Connected => ClientInstruction::Connected,
             ServerToClientMsg::ActiveClients(clients) => ClientInstruction::ActiveClients(clients),
             ServerToClientMsg::Log(log_lines) => ClientInstruction::Log(log_lines),
+            ServerToClientMsg::LogError(log_lines) => ClientInstruction::LogError(log_lines),
             ServerToClientMsg::SwitchSession(connect_to_session) => {
                 ClientInstruction::SwitchSession(connect_to_session)
             },
@@ -79,9 +82,11 @@ impl From<&ClientInstruction> for ClientContext {
             ClientInstruction::Connected => ClientContext::Connected,
             ClientInstruction::ActiveClients(_) => ClientContext::ActiveClients,
             ClientInstruction::Log(_) => ClientContext::Log,
+            ClientInstruction::LogError(_) => ClientContext::LogError,
             ClientInstruction::StartedParsingStdinQuery => ClientContext::StartedParsingStdinQuery,
             ClientInstruction::DoneParsingStdinQuery => ClientContext::DoneParsingStdinQuery,
             ClientInstruction::SwitchSession(..) => ClientContext::SwitchSession,
+            ClientInstruction::SetSynchronizedOutput(..) => ClientContext::SetSynchronisedOutput,
         }
     }
 }
@@ -381,6 +386,10 @@ pub fn start_client(
     let mut exit_msg = String::new();
     let mut loading = true;
     let mut pending_instructions = vec![];
+    let mut synchronised_output = match os_input.env_variable("TERM").as_deref() {
+        Some("alacritty") => Some(SyncOutput::DCS),
+        _ => None,
+    };
 
     let mut stdout = os_input.get_stdout_writer();
     stdout
@@ -439,9 +448,19 @@ pub fn start_client(
             },
             ClientInstruction::Render(output) => {
                 let mut stdout = os_input.get_stdout_writer();
+                if let Some(sync) = synchronised_output {
+                    stdout
+                        .write_all(sync.start_seq())
+                        .expect("cannot write to stdout");
+                }
                 stdout
                     .write_all(output.as_bytes())
                     .expect("cannot write to stdout");
+                if let Some(sync) = synchronised_output {
+                    stdout
+                        .write_all(sync.end_seq())
+                        .expect("cannot write to stdout");
+                }
                 stdout.flush().expect("could not flush");
             },
             ClientInstruction::UnblockInputThread => {
@@ -457,10 +476,18 @@ pub fn start_client(
                     log::info!("{line}");
                 }
             },
+            ClientInstruction::LogError(lines_to_log) => {
+                for line in lines_to_log {
+                    log::error!("{line}");
+                }
+            },
             ClientInstruction::SwitchSession(connect_to_session) => {
                 reconnect_to_session = Some(connect_to_session);
                 os_input.send_to_server(ClientToServerMsg::ClientExited);
                 break;
+            },
+            ClientInstruction::SetSynchronizedOutput(enabled) => {
+                synchronised_output = enabled;
             },
             _ => {},
         }

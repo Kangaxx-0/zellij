@@ -1,23 +1,46 @@
 pub use super::generated_api::api::{
     action::{PaneIdAndShouldFloat, SwitchToModePayload},
-    event::EventNameList as ProtobufEventNameList,
+    event::{EventNameList as ProtobufEventNameList, Header},
     input_mode::InputMode as ProtobufInputMode,
     plugin_command::{
-        plugin_command::Payload, CommandName, ExecCmdPayload, IdAndNewName, MovePayload,
-        OpenCommandPanePayload, OpenFilePayload, PluginCommand as ProtobufPluginCommand,
-        PluginMessagePayload, RequestPluginPermissionPayload, ResizeFloatingPaneByPercentPayload,
-        ResizePayload, SetTimeoutPayload, SubscribePayload, SwitchSessionPayload,
-        SwitchTabToPayload, UnsubscribePayload,
+        plugin_command::Payload, CommandName, ContextItem, EnvVariable, ExecCmdPayload,
+        HttpVerb as ProtobufHttpVerb, IdAndNewName, MovePayload, OpenCommandPanePayload,
+        OpenFilePayload, PluginCommand as ProtobufPluginCommand, PluginMessagePayload,
+        RequestPluginPermissionPayload, ResizeFloatingPaneByPercentPayload, ResizePayload, RunCommandPayload, SetTimeoutPayload,
+        SubscribePayload, SwitchSessionPayload, SwitchTabToPayload, UnsubscribePayload,
+        WebRequestPayload,
     },
     plugin_permission::PermissionType as ProtobufPermissionType,
     resize::{ResizeAction as ProtobufResizeAction, ResizePercent as ProtobufResizePercent},
 };
 
-use crate::data::{
-    ConnectToSession, PaneToResizeByPercent, PermissionType, PluginCommand, ResizeByPercent,
-};
+use crate::data::{ConnectToSession, HttpVerb, PermissionType, PluginCommand, RezieByPercent};
 
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use std::path::PathBuf;
+
+impl Into<HttpVerb> for ProtobufHttpVerb {
+    fn into(self) -> HttpVerb {
+        match self {
+            ProtobufHttpVerb::Get => HttpVerb::Get,
+            ProtobufHttpVerb::Post => HttpVerb::Post,
+            ProtobufHttpVerb::Put => HttpVerb::Put,
+            ProtobufHttpVerb::Delete => HttpVerb::Delete,
+        }
+    }
+}
+
+impl Into<ProtobufHttpVerb> for HttpVerb {
+    fn into(self) -> ProtobufHttpVerb {
+        match self {
+            HttpVerb::Get => ProtobufHttpVerb::Get,
+            HttpVerb::Post => ProtobufHttpVerb::Post,
+            HttpVerb::Put => ProtobufHttpVerb::Put,
+            HttpVerb::Delete => ProtobufHttpVerb::Delete,
+        }
+    }
+}
 
 impl TryFrom<ProtobufPluginCommand> for PluginCommand {
     type Error = &'static str;
@@ -582,6 +605,68 @@ impl TryFrom<ProtobufPluginCommand> for PluginCommand {
                     _ => Err("Mismatched payload for ResizeFloatingPaneByPercent"),
                 }
             },
+            Some(CommandName::RunCommand) => match protobuf_plugin_command.payload {
+                Some(Payload::RunCommandPayload(run_command_payload)) => {
+                    let env_variables: BTreeMap<String, String> = run_command_payload
+                        .env_variables
+                        .into_iter()
+                        .map(|e| (e.name, e.value))
+                        .collect();
+                    let context: BTreeMap<String, String> = run_command_payload
+                        .context
+                        .into_iter()
+                        .map(|e| (e.name, e.value))
+                        .collect();
+                    Ok(PluginCommand::RunCommand(
+                        run_command_payload.command_line,
+                        env_variables,
+                        PathBuf::from(run_command_payload.cwd),
+                        context,
+                    ))
+                },
+                _ => Err("Mismatched payload for RunCommand"),
+            },
+            Some(CommandName::WebRequest) => match protobuf_plugin_command.payload {
+                Some(Payload::WebRequestPayload(web_request_payload)) => {
+                    let context: BTreeMap<String, String> = web_request_payload
+                        .context
+                        .into_iter()
+                        .map(|e| (e.name, e.value))
+                        .collect();
+                    let headers: BTreeMap<String, String> = web_request_payload
+                        .headers
+                        .into_iter()
+                        .map(|e| (e.name, e.value))
+                        .collect();
+                    let verb = match ProtobufHttpVerb::from_i32(web_request_payload.verb) {
+                        Some(verb) => verb.into(),
+                        None => {
+                            return Err("Unrecognized http verb");
+                        },
+                    };
+                    Ok(PluginCommand::WebRequest(
+                        web_request_payload.url,
+                        verb,
+                        headers,
+                        web_request_payload.body,
+                        context,
+                    ))
+                },
+                _ => Err("Mismatched payload for WebRequest"),
+            },
+            Some(CommandName::DeleteDeadSession) => match protobuf_plugin_command.payload {
+                Some(Payload::DeleteDeadSessionPayload(dead_session_name)) => {
+                    Ok(PluginCommand::DeleteDeadSession(dead_session_name))
+                },
+                _ => Err("Mismatched payload for DeleteDeadSession"),
+            },
+            Some(CommandName::DeleteAllDeadSessions) => Ok(PluginCommand::DeleteAllDeadSessions),
+            Some(CommandName::RenameSession) => match protobuf_plugin_command.payload {
+                Some(Payload::RenameSessionPayload(new_session_name)) => {
+                    Ok(PluginCommand::RenameSession(new_session_name))
+                },
+                _ => Err("Mismatched payload for RenameSession"),
+            },
             None => Err("Unrecognized plugin command"),
         }
     }
@@ -976,6 +1061,59 @@ impl TryFrom<PluginCommand> for ProtobufPluginCommand {
                     )),
                 })
             },
+            PluginCommand::RunCommand(command_line, env_variables, cwd, context) => {
+                let env_variables: Vec<_> = env_variables
+                    .into_iter()
+                    .map(|(name, value)| EnvVariable { name, value })
+                    .collect();
+                let context: Vec<_> = context
+                    .into_iter()
+                    .map(|(name, value)| ContextItem { name, value })
+                    .collect();
+                let cwd = cwd.display().to_string();
+                Ok(ProtobufPluginCommand {
+                    name: CommandName::RunCommand as i32,
+                    payload: Some(Payload::RunCommandPayload(RunCommandPayload {
+                        command_line,
+                        env_variables,
+                        cwd,
+                        context,
+                    })),
+                })
+            },
+            PluginCommand::WebRequest(url, verb, headers, body, context) => {
+                let context: Vec<_> = context
+                    .into_iter()
+                    .map(|(name, value)| ContextItem { name, value })
+                    .collect();
+                let headers: Vec<_> = headers
+                    .into_iter()
+                    .map(|(name, value)| Header { name, value })
+                    .collect();
+                let verb: ProtobufHttpVerb = verb.into();
+                Ok(ProtobufPluginCommand {
+                    name: CommandName::WebRequest as i32,
+                    payload: Some(Payload::WebRequestPayload(WebRequestPayload {
+                        url,
+                        verb: verb as i32,
+                        body,
+                        headers,
+                        context,
+                    })),
+                })
+            },
+            PluginCommand::DeleteDeadSession(dead_session_name) => Ok(ProtobufPluginCommand {
+                name: CommandName::DeleteDeadSession as i32,
+                payload: Some(Payload::DeleteDeadSessionPayload(dead_session_name)),
+            }),
+            PluginCommand::DeleteAllDeadSessions => Ok(ProtobufPluginCommand {
+                name: CommandName::DeleteAllDeadSessions as i32,
+                payload: None,
+            }),
+            PluginCommand::RenameSession(new_session_name) => Ok(ProtobufPluginCommand {
+                name: CommandName::RenameSession as i32,
+                payload: Some(Payload::RenameSessionPayload(new_session_name)),
+            }),
         }
     }
 }

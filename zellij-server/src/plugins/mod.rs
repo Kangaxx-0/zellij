@@ -49,6 +49,7 @@ pub enum PluginInstruction {
         Option<PaneId>, // pane id to replace if this is to be opened "in-place"
         ClientId,
         Size,
+        Option<PathBuf>, // cwd
     ),
     Update(Vec<(Option<PluginId>, Option<ClientId>, Event)>), // Focused plugin / broadcast, client_id, event data
     Unload(PluginId),                                         // plugin_id
@@ -181,7 +182,9 @@ pub(crate) fn plugin_thread_main(
                 pane_id_to_replace,
                 client_id,
                 size,
-            ) => match wasm_bridge.load_plugin(&run, tab_index, size, Some(client_id)) {
+                cwd,
+            ) => match wasm_bridge.load_plugin(&run, tab_index, size, cwd.clone(), Some(client_id))
+            {
                 Ok(plugin_id) => {
                     drop(bus.senders.send_to_screen(ScreenInstruction::AddPlugin(
                         should_float,
@@ -191,6 +194,7 @@ pub(crate) fn plugin_thread_main(
                         tab_index,
                         plugin_id,
                         pane_id_to_replace,
+                        cwd,
                         Some(client_id),
                     )));
                 },
@@ -216,7 +220,7 @@ pub(crate) fn plugin_thread_main(
                             log::warn!("Plugin {} not found, starting it instead", run.location);
                             // we intentionally do not provide the client_id here because it belongs to
                             // the cli who spawned the command and is not an existing client_id
-                            match wasm_bridge.load_plugin(&run, tab_index, size, None) {
+                            match wasm_bridge.load_plugin(&run, tab_index, size, None, None) {
                                 Ok(plugin_id) => {
                                     let should_be_open_in_place = false;
                                     drop(bus.senders.send_to_screen(ScreenInstruction::AddPlugin(
@@ -226,6 +230,7 @@ pub(crate) fn plugin_thread_main(
                                         pane_title,
                                         tab_index,
                                         plugin_id,
+                                        None,
                                         None,
                                         None,
                                     )));
@@ -280,8 +285,13 @@ pub(crate) fn plugin_thread_main(
                 extracted_run_instructions.append(&mut extracted_floating_plugins);
                 for run_instruction in extracted_run_instructions {
                     if let Some(Run::Plugin(run)) = run_instruction {
-                        let plugin_id =
-                            wasm_bridge.load_plugin(&run, tab_index, size, Some(client_id))?;
+                        let plugin_id = wasm_bridge.load_plugin(
+                            &run,
+                            tab_index,
+                            size,
+                            None,
+                            Some(client_id),
+                        )?;
                         plugin_ids
                             .entry((run.location, run.configuration))
                             .or_default()

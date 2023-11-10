@@ -83,7 +83,12 @@ enum CommandName {
   OpenTerminalInPlace = 68;
   OpenCommandInPlace = 69;
   OpenFileInPlace = 70;
-  ResizeFloatingPaneByPercent = 71;
+  RunCommand = 71;
+  WebRequest = 72;
+  DeleteDeadSession = 73;
+  DeleteAllDeadSessions = 74;
+  RenameSession = 75;
+  ResizeFloatingPaneByPercent = 76;
 }
 
 message PluginCommand {
@@ -130,7 +135,11 @@ message PluginCommand {
     OpenFilePayload open_file_in_place_payload = 40;
     OpenFilePayload open_terminal_in_place_payload = 41;
     OpenCommandPanePayload open_command_pane_in_place_payload = 42;
-    ResizeFloatingPaneByPercentPayload resize_floating_pane_by_percent_payload = 43;
+    RunCommandPayload run_command_payload = 43;
+    WebRequestPayload web_request_payload = 44;
+    string delete_dead_session_payload = 45;
+    string rename_session_payload = 46;
+    ResizeFloatingPaneByPercentPayload resize_floating_pane_by_percent_payload = 47;
   }
 }
 
@@ -171,6 +180,38 @@ message SetTimeoutPayload {
 
 message ExecCmdPayload {
   repeated string command_line = 1;
+}
+
+message RunCommandPayload {
+  repeated string command_line = 1;
+  repeated EnvVariable env_variables = 2;
+  string cwd = 3;
+  repeated ContextItem context = 4;
+}
+
+message WebRequestPayload {
+  string url = 1;
+  HttpVerb verb = 2;
+  repeated event.Header headers = 3;
+  bytes body = 4;
+  repeated ContextItem context = 5;
+}
+
+enum HttpVerb {
+  Get = 0;
+  Post = 1;
+  Put = 2;
+  Delete = 3;
+}
+
+message EnvVariable {
+  string name = 1;
+  string value = 2;
+}
+
+message ContextItem {
+  string name = 1;
+  string value = 2;
 }
 
 message PluginMessagePayload {
