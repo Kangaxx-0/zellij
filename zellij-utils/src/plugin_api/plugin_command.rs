@@ -6,15 +6,18 @@ pub use super::generated_api::api::{
         plugin_command::Payload, CommandName, ContextItem, EnvVariable, ExecCmdPayload,
         HttpVerb as ProtobufHttpVerb, IdAndNewName, MovePayload, OpenCommandPanePayload,
         OpenFilePayload, PluginCommand as ProtobufPluginCommand, PluginMessagePayload,
-        RequestPluginPermissionPayload, ResizeFloatingPaneByPercentPayload, ResizePayload, RunCommandPayload, SetTimeoutPayload,
-        SubscribePayload, SwitchSessionPayload, SwitchTabToPayload, UnsubscribePayload,
-        WebRequestPayload,
+        RequestPluginPermissionPayload, ResizeFloatingPaneByPercentPayload, ResizePayload,
+        RunCommandPayload, SetTimeoutPayload, SubscribePayload, SwitchSessionPayload,
+        SwitchTabToPayload, UnsubscribePayload, WebRequestPayload,
     },
     plugin_permission::PermissionType as ProtobufPermissionType,
     resize::{ResizeAction as ProtobufResizeAction, ResizePercent as ProtobufResizePercent},
 };
 
-use crate::data::{ConnectToSession, HttpVerb, PermissionType, PluginCommand, RezieByPercent};
+use crate::data::{
+    ConnectToSession, HttpVerb, PaneToResizeByPercent, PermissionType, PluginCommand,
+    ResizeByPercent,
+};
 
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
